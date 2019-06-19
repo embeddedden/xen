@@ -22,6 +22,9 @@
 
 #endif /* __ASM_ARM_PLATFORMS_OMAP5_H */
 
+/* Secondary cpu omap5 specific init routine */
+extern void omap5_init_secondary(void);
+
 /*
  * Local variables:
  * mode: C

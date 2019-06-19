@@ -128,8 +128,9 @@ static int __init omap5_smp_init(void)
     }
 
     printk("Set AuxCoreBoot1 to %"PRIpaddr" (%p)\n",
-           __pa(init_secondary), init_secondary);
-    writel(__pa(init_secondary), wugen_base + OMAP_AUX_CORE_BOOT_1_OFFSET);
+           __pa(omap5_init_secondary), omap5_init_secondary);
+    writel(__pa(omap5_init_secondary), 
+            wugen_base + OMAP_AUX_CORE_BOOT_1_OFFSET);
 
     printk("Set AuxCoreBoot0 to 0x20\n");
     writel(0x20, wugen_base + OMAP_AUX_CORE_BOOT_0_OFFSET);

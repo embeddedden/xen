@@ -36,6 +36,10 @@
 #include EARLY_PRINTK_INC
 #endif
 
+
+#define API_HYP_ENTRY 0x102
+#define AUX_CORE_BOOT0_PA           0x48281800
+
 /*
  * Common register usage in this file:
  *   r0  -
@@ -113,6 +117,14 @@ past_zImage:
 
         b     common_start
 
+GLOBAL(omap5_init_secondary)
+		stmfd sp!, {r2-r12, lr}
+        ldr  r12, =API_HYP_ENTRY
+        adr  r0, init_secondary
+		dsb
+        smc   #0
+		ldmfd sp!, {r2-r12, lr}
+		
 GLOBAL(init_secondary)
         cpsid aif                    /* Disable all interrupts */
 
@@ -150,7 +162,6 @@ common_start:
         bl    putn
         PRINT(" booting -\r\n")
 #endif
-
         /* Check that this CPU has Hyp mode */
         mrc   CP32(r0, ID_PFR1)
         and   r0, r0, #0xf000        /* Bits 12-15 define virt extensions */
@@ -159,13 +170,12 @@ common_start:
         PRINT("- CPU doesn't support the virtualization extensions -\r\n")
         b     fail
 1:
-
         /* Check that we're already in Hyp mode */
         mrs   r0, cpsr
         and   r0, r0, #0x1f          /* Mode is in the low 5 bits of CPSR */
         teq   r0, #0x1a              /* Hyp Mode? */
         beq   hyp
-
+        
         /* OK, we're boned. */
         PRINT("- Xen must be entered in NS Hyp mode -\r\n")
         PRINT("- Please update the bootloader -\r\n")
