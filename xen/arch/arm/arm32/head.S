@@ -118,12 +118,10 @@ past_zImage:
         b     common_start
 
 GLOBAL(omap5_init_secondary)
-		stmfd sp!, {r2-r12, lr}
         ldr  r12, =API_HYP_ENTRY
         adr  r0, init_secondary
 		dsb
         smc   #0
-		ldmfd sp!, {r2-r12, lr}
 		
 GLOBAL(init_secondary)
         cpsid aif                    /* Disable all interrupts */
