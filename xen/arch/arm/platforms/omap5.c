@@ -23,6 +23,17 @@
 #include <xen/vmap.h>
 #include <asm/io.h>
 
+void omap5_init_secondary(void);
+asm (
+        ".text                              \n\t"
+        "omap5_init_secondary:              \n\t"
+        "        ldr   r12, =0x102          \n\t" /* API_HYP_ENTRY */
+        "        adr   r0, omap5_hyp        \n\t"
+        "        smc   #0                   \n\t"
+        "omap5_hyp:                         \n\t"
+        "        b     init_secondary       \n\t"
+        );
+
 static uint16_t num_den[8][2] = {
     {         0,          0 },  /* not used */
     {  26 *  64,  26 *  125 },  /* 12.0 Mhz */
@@ -128,8 +139,9 @@ static int __init omap5_smp_init(void)
     }
 
     printk("Set AuxCoreBoot1 to %"PRIpaddr" (%p)\n",
-           __pa(init_secondary), init_secondary);
-    writel(__pa(init_secondary), wugen_base + OMAP_AUX_CORE_BOOT_1_OFFSET);
+           __pa(omap5_init_secondary), omap5_init_secondary);
+    writel(__pa(omap5_init_secondary),
+           wugen_base + OMAP_AUX_CORE_BOOT_1_OFFSET);
 
     printk("Set AuxCoreBoot0 to 0x20\n");
     writel(0x20, wugen_base + OMAP_AUX_CORE_BOOT_0_OFFSET);
