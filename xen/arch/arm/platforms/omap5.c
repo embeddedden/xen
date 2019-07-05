@@ -174,7 +174,8 @@ PLATFORM_END
 PLATFORM_START(dra7, "TI DRA7")
     .compatible = dra7_dt_compat,
     .init_time = omap5_init_time,
-    .cpu_up = cpu_up_send_sgi,
+    .cpu_up = cpu_up_send_sgi,    
+    .specific_mapping = omap5_specific_mapping,
     .smp_init = omap5_smp_init,
 PLATFORM_END
 
