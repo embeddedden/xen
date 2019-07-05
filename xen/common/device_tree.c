@@ -24,6 +24,9 @@
 #include <xen/ctype.h>
 #include <asm/setup.h>
 #include <xen/err.h>
+#include <asm/platform.h>
+
+#include <asm/platforms/omap5.h>
 
 const void *device_tree_flattened;
 dt_irq_xlate_func dt_irq_xlate;
@@ -1430,6 +1433,8 @@ int dt_device_get_raw_irq(const struct dt_device_node *device,
 {
     const struct dt_device_node *p;
     const __be32 *intspec, *tmp, *addr;
+    const char *cp;
+    u32 cplen;
     u32 intsize, intlen;
     int res = -EINVAL;
     struct dt_phandle_args args;
@@ -1451,7 +1456,8 @@ int dt_device_get_raw_irq(const struct dt_device_node *device,
 
         for ( i = 0; i < args.args_count; i++ )
             args.args[i] = cpu_to_be32(args.args[i]);
-
+        
+        dprintk(XENLOG_DEBUG, "Before dt_irq_map_raw\n");
         return dt_irq_map_raw(args.np, args.args, args.args_count,
                               addr, out_irq);
     }
@@ -1466,6 +1472,8 @@ int dt_device_get_raw_irq(const struct dt_device_node *device,
     dt_dprintk(" intspec=%d intlen=%d\n", be32_to_cpup(intspec), intlen);
 
     /* Look for the interrupt parent. */
+    dprintk(XENLOG_DEBUG, "Before dt_irq_find_parent of %s\n",
+            device->name);
     p = dt_irq_find_parent(device);
     if ( p == NULL )
         return -EINVAL;
@@ -1485,8 +1493,20 @@ int dt_device_get_raw_irq(const struct dt_device_node *device,
     /* Get new specifier and map it */
     res = dt_irq_map_raw(p, intspec + index * intsize, intsize,
                          addr, out_irq);
-    if ( res )
+    if ( res ) 
+	{
         goto out;
+	}
+	    
+	cp = dt_get_property(device, "status", &cplen);
+    if ( cp )
+    {
+        if ( !dt_prop_cmp(cp, "disabled") )
+		{
+            // QUICKFIX: won't count for disabled devices for now
+            out_irq->size = 0;
+		}
+    }
 out:
     return res;
 }
@@ -1497,13 +1517,10 @@ int dt_irq_translate(const struct dt_raw_irq *raw,
     ASSERT(dt_irq_xlate != NULL);
     ASSERT(dt_interrupt_controller != NULL);
 
-    /*
-     * TODO: Retrieve the right irq_xlate. This is only works for the primary
-     * interrupt controller.
-     */
-    if ( raw->controller != dt_interrupt_controller )
+    if ( !platform_irq_is_routable(raw) )
         return -EINVAL;
 
+    dprintk(XENLOG_DEBUG, "After dt_interrupt_controller check \n");
     return dt_irq_xlate(raw->specifier, raw->size,
                         &out_irq->irq, &out_irq->type);
 }
@@ -1513,12 +1530,12 @@ int dt_device_get_irq(const struct dt_device_node *device, unsigned int index,
 {
     struct dt_raw_irq raw;
     int res;
-
+    dprintk(XENLOG_DEBUG, "Going to get raw IRQ\n");
     res = dt_device_get_raw_irq(device, index, &raw);
 
     if ( res )
         return res;
-
+    dprintk(XENLOG_DEBUG, "Before irq translate\n");
     return dt_irq_translate(&raw, out_irq);
 }
 

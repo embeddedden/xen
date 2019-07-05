@@ -22,6 +22,12 @@
 #include <xen/mm.h>
 #include <xen/vmap.h>
 #include <asm/io.h>
+#include <asm/domain_build.h>
+
+#define IRQ_FREE        -1
+#define IRQ_RESERVED    -2
+#define IRQ_SKIP        -3
+#define GIC_IRQ_START   32
 
 void omap5_init_secondary(void);
 asm (
@@ -43,6 +49,25 @@ static uint16_t num_den[8][2] = {
     {   2 * 384,   2 * 1625 },  /* 26.0 Mhz */
     {   3 * 256,   3 * 1125 },  /* 27.0 Mhz */
     { 130 *   4, 130 *   25 },  /* 38.4 Mhz */
+};
+
+static int current_offset = 0;
+//starting from the fourth line (available are 4,7-130,133-138,141-159)
+static int mpu_irq = 4;
+
+static int crossbar_offsets[160] = {0};
+
+static void * base_ctrl;
+static void * base_ctrl_page;
+
+static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
+                           register_t *r, void *priv);
+static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
+                            register_t r, void *priv);
+
+static const struct mmio_handler_ops crossbar_mmio_handler = {
+    .read  = crossbar_mmio_read,
+    .write = crossbar_mmio_write,
 };
 
 /*
@@ -108,6 +133,10 @@ static int omap5_init_time(void)
 /* Additional mappings for dom0 (not in the DTS) */
 static int omap5_specific_mapping(struct domain *d)
 {
+    int i, res, mpu_irq_n;
+    struct irq_desc *desc;
+    int crb_offset = 0;
+
     /* Map the PRM module */
     map_mmio_regions(d, gaddr_to_gfn(OMAP5_PRM_BASE), 2,
                      maddr_to_mfn(OMAP5_PRM_BASE));
@@ -123,6 +152,50 @@ static int omap5_specific_mapping(struct domain *d)
     /* Map the on-chip SRAM */
     map_mmio_regions(d, gaddr_to_gfn(OMAP5_SRAM_PA), 32,
                      maddr_to_mfn(OMAP5_SRAM_PA));
+
+    dump_p2m_lookup(d, 0x4A002A48);
+    register_mmio_handler(d, &crossbar_mmio_handler,
+                          0x4A002000,
+                          0x1000,
+                          NULL);
+
+    /*
+     * Route the IRQ to hardware domain and permit the access.
+     * The interrupt type will be set by set by the hardware domain.
+     */
+    for( i = NR_LOCAL_IRQS; i < vgic_num_irqs(d); i++ )
+    {
+        /*
+         * TODO: Exclude the SPIs SMMU uses which should not be routed to
+         * the hardware domain.
+         */
+        desc = irq_to_desc(i);
+        if ( desc->action != NULL)
+            continue;
+
+        /* XXX: Shall we use a proper devname? */
+        res = map_irq_to_domain(d, i, true, "CROSSBAR");
+        if ( res )
+            return res;
+    }
+    base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 300);
+    base_ctrl_page = ioremap(CTRL_CORE_BASE, 0x1000);
+    mpu_irq_n = 4; //starting address
+    while ( mpu_irq_n < 160 )
+    {
+        if (mpu_irq_n == 4 || 
+            ( mpu_irq_n >= 7 && mpu_irq_n <= 130 ) ||
+            ( mpu_irq_n >= 133 && mpu_irq_n <= 159 ))
+        {
+            crossbar_offsets[mpu_irq_n] = crb_offset;
+            crb_offset += 2; //to the next word
+            mpu_irq_n++;
+        }
+        else
+        {
+            mpu_irq_n++;
+        }
+    }
 
     return 0;
 }
@@ -163,6 +236,86 @@ static const char * const dra7_dt_compat[] __initconst =
     NULL
 };
 
+static const char * const crossbar_dt_compat[] __initconst =
+{
+    "arm,cortex-a15-gic",
+    "ti,irq-crossbar",
+    "ti,omap5-wugen-mpu", 
+    "ti,omap4-wugen-mpu",
+    NULL
+};
+
+int crossbar_translate(int crossbar_irq_id)
+{
+    int installed_irq;
+    base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 300);
+    base_ctrl_page = ioremap(CTRL_CORE_BASE, 0x1000);
+    while ( mpu_irq < 160 ) 
+    {
+        if (mpu_irq == 4 || 
+            ( mpu_irq >= 7 && mpu_irq <= 130 ) ||
+            ( mpu_irq >= 133 && mpu_irq <= 138 ) ||
+            ( mpu_irq >= 141 && mpu_irq <= 159 ))
+        {
+            break;
+        }
+        else
+        {
+            mpu_irq++;
+        }
+    }
+//    last_mpu_irq = mpu_irq;
+    writew(crossbar_irq_id, 
+           base_ctrl+current_offset);
+    dprintk(XENLOG_INFO, "crossbar_id = %d, mapped to irq = %d, \
+            current_offset = %d\n", crossbar_irq_id, mpu_irq, current_offset);
+    current_offset += 2;
+    installed_irq = mpu_irq;
+/*    if (current_offset >= 160)
+        // QUICKFIX: max_busy_irq_number should be less than 160
+        // map rest of the interrupts in irq 159 (vIRQ=191)
+        current_offset = 159;
+*/
+    mpu_irq++;
+    return installed_irq;
+}
+
+static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
+                           register_t *r, void *priv)
+{
+    u16 * ptr = (u16*)((u32)info->gpa - CTRL_CORE_BASE + base_ctrl_page);
+    dprintk(XENLOG_G_INFO, "Reading from the unmapped region, r=%u, paddr=%x\n",
+            *r, (u32)info->gpa);
+    *r = readw(ptr);
+    return 1;
+}
+
+static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
+                            register_t r, void *priv)
+{
+    int i;
+    u32 current_offset;
+    dprintk(XENLOG_G_INFO, "Writing into unmapped region, r=%u, paddr=%x\n",
+            r, (u32)info->gpa);
+    writew((u16)r, (u16*)(u32)(info->gpa - CTRL_CORE_BASE + base_ctrl_page));
+    if (info->gpa-CTRL_CORE_BASE >= 0xa48 && info->gpa-CTRL_CORE_BASE <= 0xb76)
+    {
+        current_offset = (u32)(info->gpa-CTRL_CORE_BASE-0xa48);
+        dprintk(XENLOG_G_INFO, "Current crossbar offset = %u\n", current_offset);
+        for (i = 0; i < 160; i++)
+        {
+            if (crossbar_offsets[i] == current_offset)
+               break;
+        }
+        if (i == 160)
+            return 0;
+
+        dprintk(XENLOG_G_INFO, "Writing into the crossbar register MPU_IRQ_%u, GIC ID = %u\n",
+                i, i+32);
+    }
+    return 1;
+}
+
 PLATFORM_START(omap5, "TI OMAP5")
     .compatible = omap5_dt_compat,
     .init_time = omap5_init_time,
@@ -173,8 +326,10 @@ PLATFORM_END
 
 PLATFORM_START(dra7, "TI DRA7")
     .compatible = dra7_dt_compat,
+    .irq_compatible = crossbar_dt_compat,
     .init_time = omap5_init_time,
-    .cpu_up = cpu_up_send_sgi,
+    .cpu_up = cpu_up_send_sgi,    
+    .specific_mapping = omap5_specific_mapping,
     .smp_init = omap5_smp_init,
 PLATFORM_END
 

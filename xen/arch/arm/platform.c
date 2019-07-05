@@ -155,6 +155,22 @@ bool platform_device_is_blacklisted(const struct dt_device_node *node)
     return (dt_match_node(blacklist, node) != NULL);
 }
 
+bool platform_irq_is_routable(const struct dt_raw_irq * rirq)
+{
+    dprintk(XENLOG_DEBUG, "In platform_irq_is_routable\n");
+    if ( platform && platform->irq_compatible )
+    {
+        int i;
+        //ARRAY_SIZE doesn't work for platform->irq_compatible
+        for (i = 0; i < 4; i++)
+        {
+            if ( dt_device_is_compatible(rirq->controller,
+                                         platform->irq_compatible[i]) )
+                return true;
+        }
+    }
+    return false;
+}
 /*
  * Local variables:
  * mode: C

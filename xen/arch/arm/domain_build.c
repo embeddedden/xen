@@ -28,6 +28,8 @@
 #include <xen/irq.h>
 #include <xen/grant_table.h>
 
+#include <asm/platforms/omap5.h>
+
 static unsigned int __initdata opt_dom0_max_vcpus;
 integer_param("dom0_max_vcpus", opt_dom0_max_vcpus);
 
@@ -898,8 +900,8 @@ static int __init make_gic_node(const struct domain *d, void *fdt,
 {
     const struct dt_device_node *gic = dt_interrupt_controller;
     int res = 0;
-    const void *addrcells, *sizecells;
-    u32 addrcells_len, sizecells_len;
+    const void *addrcells, *sizecells, *int_parent;
+    u32 addrcells_len, sizecells_len, iplen;
 
     /*
      * Xen currently supports only a single GIC. Discard any secondary
@@ -945,6 +947,15 @@ static int __init make_gic_node(const struct domain *d, void *fdt,
             return res;
     }
 
+    int_parent = dt_get_property(gic, "interrupt-parent", &iplen);
+    if ( int_parent )
+    {
+        res = fdt_property(fdt, "interrupt-parent", int_parent, iplen);
+        if ( res )
+            return res;
+    }
+
+
     res = fdt_property_cell(fdt, "#interrupt-cells", 3);
     if ( res )
         return res;
@@ -959,6 +970,187 @@ static int __init make_gic_node(const struct domain *d, void *fdt,
 
     res = fdt_end_node(fdt);
 
+    return res;
+}
+
+static int __init make_crossbar_node(const struct domain *d, void *fdt,
+                                        const struct dt_device_node
+                                        *node)
+{
+    struct dt_device_node *dev;
+    int res = 0;
+    const void *compatible;
+    const void* interrupt_parent;
+    const void* phandle = 0;
+    const __be32 *regs;
+    u32 len = 0;
+    const void *ti_max_irqs, *ti_max_crossbar_sources, *ti_reg_size,
+                *ti_irqs_reserved, *ti_irqs_skip, *ti_irqs_safe_map;
+
+    static const struct dt_device_match crossbar_ids[] __initconst =
+    {
+        DT_MATCH_CROSSBAR,
+        {/* sentinel */},
+    };
+    
+    dprintk(XENLOG_INFO, "Create crossbar node\n");
+    dev = dt_find_matching_node(NULL, crossbar_ids);
+    if ( !dev ) 
+    {
+        dprintk(XENLOG_ERR, "Missing crossbar node in the device tree?\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    compatible = dt_get_property(dev, "compatible", &len);
+    if ( !compatible )
+    {
+        dprintk(XENLOG_ERR, "Can't find compatible property for crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_begin_node(fdt, "crossbar");
+    if ( res )
+        return res;
+
+    res = fdt_property(fdt, "compatible", compatible, len);
+    if ( res )
+        return res;
+    
+    regs = dt_get_property(dev, "reg", &len);
+    if ( !regs )
+    {
+        dprintk(XENLOG_ERR, "Can't find reg property for the crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_property(fdt, "reg", regs, len);
+    if ( res )
+    {
+        return res;	
+    }
+    
+    interrupt_parent = dt_get_property(dev, "interrupt-parent", &len);
+    if ( !interrupt_parent )
+    {
+        dprintk(XENLOG_ERR, "Can't find interrupt-parent property for the \
+				crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_property(fdt, "interrupt-parent", interrupt_parent, len);
+    if ( res )
+        return res;
+
+    res = fdt_property_cell(fdt, "#interrupt-cells", 3);
+    if ( res )
+        return res;
+
+    res = fdt_property(fdt, "interrupt-controller", NULL, 0);
+    if ( res )
+        return res;
+	
+    ti_max_irqs = dt_get_property(dev, "ti,max-irqs", &len);
+    if ( !ti_max_irqs )
+    {
+        dprintk(XENLOG_ERR, "Can't find ti,max-irqs property for the \
+				crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_property(fdt, "ti,max-irqs", ti_max_irqs, len);
+    if ( res )
+    {
+        return res;
+    }
+
+    ti_max_crossbar_sources = dt_get_property(dev, "ti,max-crossbar-sources",
+                        		      &len);
+    if ( !ti_max_crossbar_sources )
+    {
+        dprintk(XENLOG_ERR, "Can't find ti,max-crossbar-sources property \
+		for the crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_property(fdt, "ti,max-crossbar-sources", 
+		       ti_max_crossbar_sources, len);
+    if ( res )
+    {
+        return res;
+    }
+
+    ti_reg_size = dt_get_property(dev, "ti,reg-size", &len);
+    if ( !ti_reg_size )
+    {
+        dprintk(XENLOG_ERR, "Can't find ti,reg-size property for the \
+                crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_property(fdt, "ti,reg-size", ti_reg_size, len);
+    if ( res )
+    {
+        return res;
+    }
+
+    ti_irqs_reserved = dt_get_property(dev, "ti,irqs-reserved", &len);
+    if ( !ti_irqs_reserved )
+    {
+        dprintk(XENLOG_ERR, "Can't find ti,irqs-reserved property for the \
+                crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_property(fdt, "ti,irqs-reserved", ti_irqs_reserved, len);
+    if ( res )
+    {
+        return res;
+    }
+
+    ti_irqs_skip = dt_get_property(dev, "ti,irqs-skip", &len);
+    if ( !ti_irqs_skip )
+    {
+        dprintk(XENLOG_ERR, "Can't find ti,irqs-skip property for the \
+                crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_property(fdt, "ti,irqs-skip", ti_irqs_skip, len);
+    if ( res )
+    {
+        return res;
+    }
+
+    ti_irqs_safe_map = dt_get_property(dev, "ti,irqs-safe-map", &len);
+    if ( !ti_irqs_safe_map )
+    {
+        dprintk(XENLOG_ERR, "Can't find ti,irqs-safe-map property for the \
+                crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_property(fdt, "ti,irqs-safe-map", ti_irqs_safe_map, len);
+    if ( res )
+    {
+        return res;
+    }	
+
+    phandle = dt_get_property(dev, "phandle", &len);
+    if ( !phandle )
+    {
+        dprintk(XENLOG_ERR, "Can't find phandle property for the \
+                crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_property(fdt, "phandle", phandle, len);
+    if ( res )
+    {
+        return res;
+    }
+
+    res = fdt_end_node(fdt);
+    
     return res;
 }
 
@@ -1158,6 +1350,9 @@ static int __init map_range_to_domain(const struct dt_device_node *dev,
     bool need_mapping = !dt_device_for_passthrough(dev);
     int res;
 
+    if (addr >= 0x4A002000 && addr <= 0x4A003000)
+            printk(XENLOG_INFO "Map address = %llx, for device %s\n", addr, dev->name);
+
     res = iomem_permit_access(d, paddr_to_pfn(addr),
                               paddr_to_pfn(PAGE_ALIGN(addr + len - 1)));
     if ( res )
@@ -1274,7 +1469,7 @@ static int __init handle_device(struct domain *d, struct dt_device_node *dev,
          * Don't map IRQ that have no physical meaning
          * ie: IRQ whose controller is not the GIC
          */
-        if ( rirq.controller != dt_interrupt_controller )
+        if ( !platform_irq_is_routable(&rirq) )
         {
             dt_dprintk("irq %u not connected to primary controller. Connected to %s\n",
                       i, dt_node_full_name(rirq.controller));
@@ -1306,6 +1501,8 @@ static int __init handle_device(struct domain *d, struct dt_device_node *dev,
             return res;
         }
 
+        if (addr >= 0x4A002000 && addr <= 0x4A003000)
+            printk(XENLOG_INFO "Map address = %llx, for device %s\n", addr, dev->name);
         res = map_range_to_domain(dev, addr, size, &mr_data);
         if ( res )
             return res;
@@ -1345,6 +1542,13 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
         DT_MATCH_TIMER,
         { /* sentinel */ },
     };
+
+    static const struct dt_device_match crossbar_matches[] __initconst =
+    {
+        DT_MATCH_CROSSBAR,
+        {/* sentinel */},
+    };
+
     static const struct dt_device_match reserved_matches[] __initconst =
     {
         DT_MATCH_PATH("/psci"),
@@ -1381,11 +1585,16 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
         return make_gic_node(d, kinfo->fdt, node);
     if ( dt_match_node(timer_matches, node) )
         return make_timer_node(d, kinfo->fdt, node);
+    if ( dt_match_node(crossbar_matches, node) ) {
+        printk ("Crossbar was matched!\n");
+        return make_crossbar_node(d, kinfo->fdt, node);
+    }
 
     /* Skip nodes used by Xen */
     if ( dt_device_used_by(node) == DOMID_XEN )
     {
         dt_dprintk("  Skip it (used by Xen)\n");
+        printk("   Skip %s\n", node->full_name);
         return 0;
     }
 
@@ -1790,6 +1999,8 @@ static int __init prepare_dtb_hwdom(struct domain *d, struct kernel_info *kinfo)
     if ( ret < 0 )
         goto err;
 
+    unmap_mmio_regions(d, gaddr_to_gfn(0x4A002000), 1,
+                       maddr_to_mfn(0x4A002000));
     return 0;
 
   err:

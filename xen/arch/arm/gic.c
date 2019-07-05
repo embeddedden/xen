@@ -38,6 +38,8 @@
 #include <asm/vgic.h>
 #include <asm/acpi.h>
 
+#include <asm/platforms/omap5.h>
+
 DEFINE_PER_CPU(uint64_t, lr_mask);
 
 #undef GIC_DEBUG
@@ -198,6 +200,19 @@ int gic_irq_xlate(const u32 *intspec, unsigned int intsize,
                   unsigned int *out_hwirq,
                   unsigned int *out_type)
 {
+
+    if ( out_type )
+        *out_type = intspec[2] & IRQ_TYPE_SENSE_MASK;
+
+    if ( !intsize )
+    {
+        //map to the last line of GIC
+        *out_hwirq = 191;
+        dprintk(XENLOG_INFO, "Map the disabled device irq to line 191\n");
+        return 0;
+    }
+
+
     if ( intsize < 3 )
         return -EINVAL;
 
@@ -206,10 +221,11 @@ int gic_irq_xlate(const u32 *intspec, unsigned int intsize,
 
     /* For SPIs, we need to add 16 more to get the GIC irq ID number */
     if ( !intspec[0] )
+    {
+        *out_hwirq += crossbar_translate(intspec[1]);
+        *out_hwirq -= intspec[1];
         *out_hwirq += 16;
-
-    if ( out_type )
-        *out_type = intspec[2] & IRQ_TYPE_SENSE_MASK;
+    }
 
     return 0;
 }

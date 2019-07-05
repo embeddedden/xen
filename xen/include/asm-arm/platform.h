@@ -11,6 +11,7 @@ struct platform_desc {
     const char *name;
     /* Array of device tree 'compatible' strings */
     const char *const *compatible;
+    const char *const *irq_compatible;
     /* Platform initialization */
     int (*init)(void);
     int (*init_time)(void);
@@ -59,6 +60,7 @@ void platform_poweroff(void);
 bool platform_smc(struct cpu_user_regs *regs);
 bool platform_has_quirk(uint32_t quirk);
 bool platform_device_is_blacklisted(const struct dt_device_node *node);
+bool platform_irq_is_routable(const struct dt_raw_irq * rirq);
 
 #define PLATFORM_START(_name, _namestr)                         \
 static const struct platform_desc  __plat_desc_##_name __used   \
@@ -69,6 +71,12 @@ __section(".arch.info") = {                                     \
 };
 
 #endif /* __ASM_ARM_PLATFORM_H */
+
+/**
+ * irq_parent_is_supported - Find whether irq parent is supported
+ * @rirq: The node from which the interrupt route should be found.
+ */
+bool irq_parent_is_supported (const struct dt_raw_irq *rirq);
 
 /*
  * Local variables:
