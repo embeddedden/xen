@@ -22,6 +22,11 @@
 #include <xen/mm.h>
 #include <xen/vmap.h>
 #include <asm/io.h>
+#include <xen/lib.h>
+#include <xen/iocap.h>
+
+#define OMAP5_CTRL_CORE_MPU_IRQ_BASE    0x4A002A48
+#define OMAP5_CTRL_MODULE               0x4A002000
 
 void omap5_init_secondary(void);
 asm (
@@ -73,7 +78,7 @@ static int omap5_init_time(void)
 
     iounmap(ckgen_prm_base);
 
-    rt_ct_base = ioremap_nocache(REALTIME_COUNTER_BASE, 0x20);
+    rt_ct_base = ioremap_nocache(REALTIME_COUNTER_BASE, 0x20);  
     if ( !rt_ct_base )
     {
         dprintk(XENLOG_ERR, "%s: REALTIME_COUNTER_BASE ioremap failed\n", __func__);
@@ -105,6 +110,59 @@ static int omap5_init_time(void)
     return 0;
 }
 
+static int omap5_crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
+                                    register_t *r, void *priv);
+static int omap5_crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
+                                     register_t r, void *priv);
+
+static const struct mmio_handler_ops omap5_crossbar_mmio_handler = {
+    .read = omap5_crossbar_mmio_read,
+    .write = omap5_crossbar_mmio_write,
+};
+
+static int omap5_crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
+                                    register_t *r, void *priv)
+{
+    printk("Get into %s\n", __func__);
+    return 0;
+}
+
+static int omap5_crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
+                                     register_t r, void *priv)
+{
+    printk("Get into %s\n", __func__);
+    return 0;
+}
+
+static int domain_omap5_crossbar_init(struct domain *d)
+{
+    int rc;
+    unsigned long pfn_start, pfn_end;
+
+    ASSERT( is_hardware_domain(d) );
+
+    pfn_start = paddr_to_pfn(OMAP5_CTRL_CORE_MPU_IRQ_BASE);
+    pfn_end = DIV_ROUND_UP(OMAP5_CTRL_CORE_MPU_IRQ_BASE + 300,
+                           PAGE_SIZE);
+    rc = iomem_deny_access(d, pfn_start, pfn_end);
+
+    if ( rc )
+        panic("Failed to deny access to the Crossbar control registers");
+
+    rc = unmap_mmio_regions(d, _gfn(pfn_start), 
+                            pfn_end + pfn_start + 1,
+                            _mfn(pfn_start));
+
+    if ( rc )
+        panic("Failed to unmap the OMAP5 crossbar");
+
+    register_mmio_handler(d, &omap5_crossbar_mmio_handler,
+                          OMAP5_CTRL_CORE_MPU_IRQ_BASE,
+                          300,
+                          NULL);
+    return 0;
+}
+
 /* Additional mappings for dom0 (not in the DTS) */
 static int omap5_specific_mapping(struct domain *d)
 {
@@ -124,6 +182,9 @@ static int omap5_specific_mapping(struct domain *d)
     map_mmio_regions(d, gaddr_to_gfn(OMAP5_SRAM_PA), 32,
                      maddr_to_mfn(OMAP5_SRAM_PA));
 
+//    map_mmio_regions(d, gaddr_to_gfn(OMAP5_CTRL_MODULE), 0x1C44,
+  //                  maddr_to_mfn(OMAP5_CTRL_MODULE));
+    domain_omap5_crossbar_init(d);
     return 0;
 }
 
