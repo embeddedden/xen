@@ -1000,10 +1000,6 @@ static int __init make_crossbar_node(const struct domain *d, void *fdt,
         return -FDT_ERR_XEN(ENOENT);
     }
 
-    //TODO: I don't understand this magic
-    len = dt_cells_to_size(dt_n_addr_cells(dev) + dt_n_size_cells(dev));
-    len *= 2;
-
     res = fdt_property(fdt, "reg", regs, len);
     if ( res )
     {
