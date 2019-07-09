@@ -968,7 +968,85 @@ static int __init make_crossbar_node(const struct domain *d, void *fdt,
                                         const struct dt_device_node
                                         *node)
 {
-    return 0;
+    struct dt_device_node *dev;
+    int res = 0;
+	const void* interrupt_parent;
+    const void* phandle = 0;
+	const __be32 *regs;
+	u32 len = 0;
+
+    static const struct dt_device_match crossbar_ids[] __initconst =
+    {
+        DT_MATCH_CROSSBAR,
+        {/* sentinel */},
+    };
+
+    dt_dprintk("Create crossbar node\n");
+    dev = dt_find_matching_node(NULL, crossbar_ids);
+    if ( !dev ) 
+    {
+        dprintk(XENLOG_ERR, "Missing crossbar node in the device tree?\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+	res = fdt_begin_node(fdt, "crossbar");
+    if ( res )
+        return res;
+
+    regs = dt_get_property(dev, "reg", &len);
+    if ( !regs )
+    {
+        dprintk(XENLOG_ERR, "Can't find reg property for the crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    //TODO: I don't understand this magic
+    len = dt_cells_to_size(dt_n_addr_cells(dev) + dt_n_size_cells(dev));
+    len *= 2;
+
+    res = fdt_property(fdt, "reg", regs, len);
+    if ( res )
+    {
+        return res;	
+    }
+    
+	interrupt_parent = dt_get_property(dev, "interrupt-parent", &len);
+    if ( !interrupt_parent )
+    {
+        dprintk(XENLOG_ERR, "Can't find interrupt-parent property for the \
+				crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_property(fdt, "interrupt-parent", interrupt_parent, len);
+    if ( res )
+        return res;
+
+    res = fdt_property_cell(fdt, "#interrupt-cells", 3);
+    if ( res )
+        return res;
+
+    res = fdt_property(fdt, "interrupt-controller", NULL, 0);
+    if ( res )
+        return res;
+	
+    phandle = dt_get_property(dev, "phandle", &len);
+    if ( !phandle )
+    {
+        dprintk(XENLOG_ERR, "Can't find phandle property for the \
+                crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_property(fdt, "phandle", phandle, len);
+    if ( res )
+    {
+        return res;
+    }
+
+	res = fdt_end_node(fdt);
+
+    return res;
 }
 
 static int __init make_timer_node(const struct domain *d, void *fdt,
