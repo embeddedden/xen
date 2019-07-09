@@ -28,6 +28,8 @@
 #include <xen/irq.h>
 #include <xen/grant_table.h>
 
+#include <asm/platforms/omap5.h>
+
 static unsigned int __initdata opt_dom0_max_vcpus;
 integer_param("dom0_max_vcpus", opt_dom0_max_vcpus);
 
@@ -962,6 +964,13 @@ static int __init make_gic_node(const struct domain *d, void *fdt,
     return res;
 }
 
+static int __init make_crossbar_node(const struct domain *d, void *fdt,
+                                        const struct dt_device_node
+                                        *node)
+{
+    return 0;
+}
+
 static int __init make_timer_node(const struct domain *d, void *fdt,
                                   const struct dt_device_node *node)
 {
@@ -1345,6 +1354,13 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
         DT_MATCH_TIMER,
         { /* sentinel */ },
     };
+
+    static const struct dt_device_match crossbar_matches[] __initconst =
+    {
+        DT_MATCH_CROSSBAR,
+        {/* sentinel */},
+    };
+
     static const struct dt_device_match reserved_matches[] __initconst =
     {
         DT_MATCH_PATH("/psci"),
@@ -1381,6 +1397,10 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
         return make_gic_node(d, kinfo->fdt, node);
     if ( dt_match_node(timer_matches, node) )
         return make_timer_node(d, kinfo->fdt, node);
+    if ( dt_match_node(crossbar_matches, node) ) {
+        printk ("Crossbar was matched!\n");
+        return make_crossbar_node(d, kinfo->fdt, node);
+    }
 
     /* Skip nodes used by Xen */
     if ( dt_device_used_by(node) == DOMID_XEN )
