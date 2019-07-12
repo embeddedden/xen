@@ -698,12 +698,14 @@ int platform_get_irq(const struct dt_device_node *device, int index)
     struct dt_irq dt_irq;
     unsigned int type, irq;
 
+    dprintk(XENLOG_DEBUG, "Going to try to get IRQ\n");
     if ( dt_device_get_irq(device, index, &dt_irq) )
         return -1;
 
     irq = dt_irq.irq;
     type = dt_irq.type;
 
+    dprintk(XENLOG_DEBUG, "Going to set type\n");
     if ( irq_set_type(irq, type) )
         return -1;
 
