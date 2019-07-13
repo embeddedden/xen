@@ -1484,7 +1484,8 @@ int dt_device_get_raw_irq(const struct dt_device_node *device,
     dt_dprintk(" intspec=%d intlen=%d\n", be32_to_cpup(intspec), intlen);
 
     /* Look for the interrupt parent. */
-    dprintk(XENLOG_DEBUG, "Before dt_irq_find_parent\n");
+    dprintk(XENLOG_DEBUG, "Before dt_irq_find_parent of %s\n",
+            device->name);
     p = dt_irq_find_parent(device);
     if ( p == NULL )
         return -EINVAL;

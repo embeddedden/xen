@@ -1446,7 +1446,7 @@ static int __init handle_device(struct domain *d, struct dt_device_node *dev,
          * Don't map IRQ that have no physical meaning
          * ie: IRQ whose controller is not the GIC
          */
-        if ( rirq.controller != dt_interrupt_controller )
+        if ( !platform_irq_is_routable(&rirq) )
         {
             dt_dprintk("irq %u not connected to primary controller. Connected to %s\n",
                       i, dt_node_full_name(rirq.controller));
