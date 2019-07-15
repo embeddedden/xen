@@ -45,6 +45,10 @@ static uint16_t num_den[8][2] = {
     { 130 *   4, 130 *   25 },  /* 38.4 Mhz */
 };
 
+static int max_busy_irq_number = 1;
+
+static void * base_ctrl;
+
 /*
  * The realtime counter also called master counter, is a free-running
  * counter, which is related to real time. It produces the count used
@@ -162,6 +166,16 @@ static const char * const dra7_dt_compat[] __initconst =
     "ti,dra7",
     NULL
 };
+
+int crossbar_translate()
+{
+    base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 159*4);
+
+    writel(max_busy_irq_number+1, 
+           base_ctrl+max_busy_irq_number*4);
+    return max_busy_irq_number++;
+}
+
 
 PLATFORM_START(omap5, "TI OMAP5")
     .compatible = omap5_dt_compat,

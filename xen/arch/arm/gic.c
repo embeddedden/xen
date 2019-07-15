@@ -38,6 +38,8 @@
 #include <asm/vgic.h>
 #include <asm/acpi.h>
 
+#include <asm/platforms/omap5.h>
+
 DEFINE_PER_CPU(uint64_t, lr_mask);
 
 #undef GIC_DEBUG
@@ -206,8 +208,11 @@ int gic_irq_xlate(const u32 *intspec, unsigned int intsize,
 
     /* For SPIs, we need to add 16 more to get the GIC irq ID number */
     if ( !intspec[0] )
+    {
+        *out_hwirq += crossbar_translate();
+        *out_hwirq -= intspec[1];
         *out_hwirq += 16;
-
+    }
     if ( out_type )
         *out_type = intspec[2] & IRQ_TYPE_SENSE_MASK;
 

@@ -26,6 +26,8 @@
 #include <xen/err.h>
 #include <asm/platform.h>
 
+#include <asm/platforms/omap5.h>
+
 const void *device_tree_flattened;
 dt_irq_xlate_func dt_irq_xlate;
 /* Host device tree */
@@ -1519,7 +1521,6 @@ int dt_irq_translate(const struct dt_raw_irq *raw,
 
     if ( !platform_irq_is_routable(raw) )
         return -EINVAL;
-
 
     dprintk(XENLOG_DEBUG, "After dt_interrupt_controller check \n");
     return dt_irq_xlate(raw->specifier, raw->size,
