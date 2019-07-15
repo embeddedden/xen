@@ -985,22 +985,6 @@ dt_irq_find_parent(const struct dt_device_node *child)
     return p;
 }
 
-bool routable_irq_parent (const struct dt_device_node *child,
-                          const struct dt_device_node *ancestor)
-{    
-    const struct dt_device_node *transit_irq_parent = child;
-    if (child == ancestor)
-        return true;
-    while ( (transit_irq_parent = dt_irq_find_parent(transit_irq_parent)) )
-    {
-        dprintk(XENLOG_DEBUG, "Parent irq name is %s\n",
-                transit_irq_parent->name);
-        if ( transit_irq_parent == ancestor )
-            return true;
-    }
-    return false;
-}
-
 unsigned int dt_number_of_irq(const struct dt_device_node *device)
 {
     const struct dt_device_node *p;

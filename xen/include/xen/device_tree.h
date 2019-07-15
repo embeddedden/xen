@@ -311,15 +311,6 @@ static inline bool_t dt_property_name_is_equal(const struct dt_property *pp,
 }
 
 /**
- * routable_irq_parent - Find whether ancestor node is a transitive
- *                       interrupt parent for child node
- * @child: The node from which the interrupt route should be found.
- * @ancestor: The node to which interrup route should be found.
- */ 
-bool routable_irq_parent (const struct dt_device_node *child,
-                          const struct dt_device_node *ancestor);
-
-/**
  * dt_find_compatible_node - Find a node based on type and one of the
  *                           tokens in its "compatible" property
  * @from: The node to start searching from or NULL, the node

@@ -11,6 +11,7 @@ struct platform_desc {
     const char *name;
     /* Array of device tree 'compatible' strings */
     const char *const *compatible;
+    const char *const *irq_compatible;
     /* Platform initialization */
     int (*init)(void);
     int (*init_time)(void);
@@ -70,6 +71,12 @@ __section(".arch.info") = {                                     \
 };
 
 #endif /* __ASM_ARM_PLATFORM_H */
+
+/**
+ * irq_parent_is_supported - Find whether irq parent is supported
+ * @rirq: The node from which the interrupt route should be found.
+ */
+bool irq_parent_is_supported (const struct dt_raw_irq *rirq);
 
 /*
  * Local variables:

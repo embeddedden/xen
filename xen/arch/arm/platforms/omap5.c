@@ -167,6 +167,15 @@ static const char * const dra7_dt_compat[] __initconst =
     NULL
 };
 
+static const char * const crossbar_dt_compat[] __initconst =
+{
+    "arm,cortex-a15-gic",
+    "ti,irq-crossbar",
+    "ti,omap5-wugen-mpu", 
+    "ti,omap4-wugen-mpu",
+    NULL
+};
+
 int crossbar_translate()
 {
     base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 159*4);
@@ -187,6 +196,7 @@ PLATFORM_END
 
 PLATFORM_START(dra7, "TI DRA7")
     .compatible = dra7_dt_compat,
+    .irq_compatible = crossbar_dt_compat,
     .init_time = omap5_init_time,
     .cpu_up = cpu_up_send_sgi,    
     .specific_mapping = omap5_specific_mapping,
