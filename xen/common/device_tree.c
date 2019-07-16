@@ -1433,6 +1433,8 @@ int dt_device_get_raw_irq(const struct dt_device_node *device,
 {
     const struct dt_device_node *p;
     const __be32 *intspec, *tmp, *addr;
+    const char *cp;
+    u32 cplen;
     u32 intsize, intlen;
     int res = -EINVAL;
     struct dt_phandle_args args;
@@ -1491,8 +1493,20 @@ int dt_device_get_raw_irq(const struct dt_device_node *device,
     /* Get new specifier and map it */
     res = dt_irq_map_raw(p, intspec + index * intsize, intsize,
                          addr, out_irq);
-    if ( res )
+    if ( res ) 
+	{
         goto out;
+	}
+	    
+	cp = dt_get_property(device, "status", &cplen);
+    if ( cp )
+    {
+        if ( !dt_prop_cmp(cp, "disabled") )
+		{
+            // QUICKFIX: won't count for disabled devices for now
+            out_irq->size = 0;
+		}
+    }
 out:
     return res;
 }

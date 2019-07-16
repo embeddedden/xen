@@ -178,11 +178,17 @@ static const char * const crossbar_dt_compat[] __initconst =
 
 int crossbar_translate()
 {
-    base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 159*4);
+    base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 160*4);
 
     writel(max_busy_irq_number+1, 
            base_ctrl+max_busy_irq_number*4);
-    return max_busy_irq_number++;
+    max_busy_irq_number += 1;
+    dprintk(XENLOG_INFO, "max_busy_irq_number = %d\n", max_busy_irq_number);
+    if (max_busy_irq_number >= 160)
+        // QUICKFIX: max_busy_irq_number should be less than 160
+        // map rest of the interrupts in irq 159 (vIRQ=191)
+        max_busy_irq_number = 159;
+    return max_busy_irq_number;
 }
 
 

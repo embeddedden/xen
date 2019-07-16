@@ -200,6 +200,19 @@ int gic_irq_xlate(const u32 *intspec, unsigned int intsize,
                   unsigned int *out_hwirq,
                   unsigned int *out_type)
 {
+
+    if ( out_type )
+        *out_type = intspec[2] & IRQ_TYPE_SENSE_MASK;
+
+    if ( !intsize )
+    {
+        //map to the last line of GIC
+        *out_hwirq = 191;
+        dprintk(XENLOG_INFO, "Map the disabled device irq to line 191\n");
+        return 0;
+    }
+
+
     if ( intsize < 3 )
         return -EINVAL;
 
@@ -213,8 +226,6 @@ int gic_irq_xlate(const u32 *intspec, unsigned int intsize,
         *out_hwirq -= intspec[1];
         *out_hwirq += 16;
     }
-    if ( out_type )
-        *out_type = intspec[2] & IRQ_TYPE_SENSE_MASK;
 
     return 0;
 }
