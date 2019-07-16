@@ -25,7 +25,7 @@
 
 #define CTRL_CORE_MPU_IRQ_BASE                  0x4A002A48
 
-int crossbar_translate(void);
+int crossbar_translate(int crossbar_irq_id);
 
 #endif /* __ASM_ARM_PLATFORMS_OMAP5_H */
 

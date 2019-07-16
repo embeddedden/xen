@@ -45,7 +45,9 @@ static uint16_t num_den[8][2] = {
     { 130 *   4, 130 *   25 },  /* 38.4 Mhz */
 };
 
-static int max_busy_irq_number = 1;
+static int current_offset = 0;
+//starting from the fourth line (available are 4,7-130,133-138,141-159)
+static int mpu_irq = 4;
 
 static void * base_ctrl;
 
@@ -176,19 +178,34 @@ static const char * const crossbar_dt_compat[] __initconst =
     NULL
 };
 
-int crossbar_translate()
+int crossbar_translate(int crossbar_irq_id)
 {
-    base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 160*4);
-
-    writel(max_busy_irq_number+1, 
-           base_ctrl+max_busy_irq_number*4);
-    max_busy_irq_number += 1;
-    dprintk(XENLOG_INFO, "max_busy_irq_number = %d\n", max_busy_irq_number);
-    if (max_busy_irq_number >= 160)
+    int installed_irq;
+    base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 300);
+    while ( mpu_irq < 160 ) 
+    {
+        if (mpu_irq == 4 || 
+            ( mpu_irq >= 7 && mpu_irq <= 130 ) ||
+            ( mpu_irq >= 133 && mpu_irq <= 138 ) ||
+            ( mpu_irq >= 141 && mpu_irq <= 159 ))
+            break;
+        else
+            mpu_irq++;
+    }
+//    last_mpu_irq = mpu_irq;
+    writew(crossbar_irq_id, 
+           base_ctrl+current_offset);
+    dprintk(XENLOG_INFO, "crossbar_id = %d, mapped to irq = %d, \
+            current_offset = %d\n", crossbar_irq_id, mpu_irq, current_offset);
+    current_offset += 2;
+    installed_irq = mpu_irq;
+/*    if (current_offset >= 160)
         // QUICKFIX: max_busy_irq_number should be less than 160
         // map rest of the interrupts in irq 159 (vIRQ=191)
-        max_busy_irq_number = 159;
-    return max_busy_irq_number;
+        current_offset = 159;
+*/
+    mpu_irq++;
+    return installed_irq;
 }
 
 

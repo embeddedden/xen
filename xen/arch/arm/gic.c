@@ -222,7 +222,7 @@ int gic_irq_xlate(const u32 *intspec, unsigned int intsize,
     /* For SPIs, we need to add 16 more to get the GIC irq ID number */
     if ( !intspec[0] )
     {
-        *out_hwirq += crossbar_translate();
+        *out_hwirq += crossbar_translate(intspec[1]);
         *out_hwirq -= intspec[1];
         *out_hwirq += 16;
     }
