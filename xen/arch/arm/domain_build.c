@@ -970,12 +970,13 @@ static int __init make_crossbar_node(const struct domain *d, void *fdt,
 {
     struct dt_device_node *dev;
     int res = 0;
-	const void* interrupt_parent;
+    const void *compatible;
+    const void* interrupt_parent;
     const void* phandle = 0;
-	const __be32 *regs;
-	u32 len = 0;
+    const __be32 *regs;
+    u32 len = 0;
     const void *ti_max_irqs, *ti_max_crossbar_sources, *ti_reg_size,
-          *ti_irqs_reserved, *ti_irqs_skip, *ti_irqs_safe_map;
+                *ti_irqs_reserved, *ti_irqs_skip, *ti_irqs_safe_map;
 
     static const struct dt_device_match crossbar_ids[] __initconst =
     {
@@ -983,7 +984,7 @@ static int __init make_crossbar_node(const struct domain *d, void *fdt,
         {/* sentinel */},
     };
 
-    dt_dprintk("Create crossbar node\n");
+    dprintk(XENLOG_INFO, "Create crossbar node\n");
     dev = dt_find_matching_node(NULL, crossbar_ids);
     if ( !dev ) 
     {
@@ -991,10 +992,21 @@ static int __init make_crossbar_node(const struct domain *d, void *fdt,
         return -FDT_ERR_XEN(ENOENT);
     }
 
-	res = fdt_begin_node(fdt, "crossbar");
+    compatible = dt_get_property(dev, "compatible", &len);
+    if ( !compatible )
+    {
+        dprintk(XENLOG_ERR, "Can't find compatible property for crossbar node\n");
+        return -FDT_ERR_XEN(ENOENT);
+    }
+
+    res = fdt_begin_node(fdt, "crossbar");
     if ( res )
         return res;
 
+    res = fdt_property(fdt, "compatible", compatible, len);
+    if ( res )
+        return res;
+    
     regs = dt_get_property(dev, "reg", &len);
     if ( !regs )
     {
@@ -1008,7 +1020,7 @@ static int __init make_crossbar_node(const struct domain *d, void *fdt,
         return res;	
     }
     
-	interrupt_parent = dt_get_property(dev, "interrupt-parent", &len);
+    interrupt_parent = dt_get_property(dev, "interrupt-parent", &len);
     if ( !interrupt_parent )
     {
         dprintk(XENLOG_ERR, "Can't find interrupt-parent property for the \
@@ -1043,22 +1055,22 @@ static int __init make_crossbar_node(const struct domain *d, void *fdt,
     }
 
     ti_max_crossbar_sources = dt_get_property(dev, "ti,max-crossbar-sources",
-											  &len);
+                        		      &len);
     if ( !ti_max_crossbar_sources )
     {
         dprintk(XENLOG_ERR, "Can't find ti,max-crossbar-sources property \
-				for the crossbar node\n");
+		for the crossbar node\n");
         return -FDT_ERR_XEN(ENOENT);
     }
 
     res = fdt_property(fdt, "ti,max-crossbar-sources", 
-					   ti_max_crossbar_sources, len);
+		       ti_max_crossbar_sources, len);
     if ( res )
     {
         return res;
     }
 
-	ti_reg_size = dt_get_property(dev, "ti,reg-size", &len);
+    ti_reg_size = dt_get_property(dev, "ti,reg-size", &len);
     if ( !ti_reg_size )
     {
         dprintk(XENLOG_ERR, "Can't find ti,reg-size property for the \
@@ -1094,7 +1106,7 @@ static int __init make_crossbar_node(const struct domain *d, void *fdt,
         return -FDT_ERR_XEN(ENOENT);
     }
 
-    res = fdt_property(fdt, "ti,irqs-skip",  ti_irqs_skip, len);
+    res = fdt_property(fdt, "ti,irqs-skip", ti_irqs_skip, len);
     if ( res )
     {
         return res;
@@ -1128,8 +1140,7 @@ static int __init make_crossbar_node(const struct domain *d, void *fdt,
         return res;
     }
 
-	res = fdt_end_node(fdt);
-
+    res = fdt_end_node(fdt);
 
     return res;
 }
