@@ -900,8 +900,8 @@ static int __init make_gic_node(const struct domain *d, void *fdt,
 {
     const struct dt_device_node *gic = dt_interrupt_controller;
     int res = 0;
-    const void *addrcells, *sizecells;
-    u32 addrcells_len, sizecells_len;
+    const void *addrcells, *sizecells, *int_parent;
+    u32 addrcells_len, sizecells_len, iplen;
 
     /*
      * Xen currently supports only a single GIC. Discard any secondary
@@ -946,6 +946,15 @@ static int __init make_gic_node(const struct domain *d, void *fdt,
         if ( res )
             return res;
     }
+
+    int_parent = dt_get_property(gic, "interrupt-parent", &iplen);
+    if ( int_parent )
+    {
+        res = fdt_property(fdt, "interrupt-parent", int_parent, iplen);
+        if ( res )
+            return res;
+    }
+
 
     res = fdt_property_cell(fdt, "#interrupt-cells", 3);
     if ( res )
@@ -1580,6 +1589,7 @@ static int __init handle_node(struct domain *d, struct kernel_info *kinfo,
     if ( dt_device_used_by(node) == DOMID_XEN )
     {
         dt_dprintk("  Skip it (used by Xen)\n");
+        printk("   Skip %s\n", node->full_name);
         return 0;
     }
 
