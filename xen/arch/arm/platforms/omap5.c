@@ -51,6 +51,16 @@ static int mpu_irq = 4;
 
 static void * base_ctrl;
 
+static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
+                           register_t *r, void *priv);
+static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
+                            register_t r, void *priv);
+
+static const struct mmio_handler_ops crossbar_mmio_handler = {
+    .read  = crossbar_mmio_read,
+    .write = crossbar_mmio_write,
+};
+
 /*
  * The realtime counter also called master counter, is a free-running
  * counter, which is related to real time. It produces the count used
@@ -130,6 +140,10 @@ static int omap5_specific_mapping(struct domain *d)
     map_mmio_regions(d, gaddr_to_gfn(OMAP5_SRAM_PA), 32,
                      maddr_to_mfn(OMAP5_SRAM_PA));
 
+    register_mmio_handler(d, &crossbar_mmio_handler,
+                          0x4A002A48,
+                          300,
+                          NULL);
     return 0;
 }
 
@@ -208,6 +222,19 @@ int crossbar_translate(int crossbar_irq_id)
     return installed_irq;
 }
 
+static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
+                           register_t *r, void *priv)
+{
+    dprintk(XENLOG_G_INFO, "Reading some crossbar register\n");
+    return 1;
+}
+
+static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
+                            register_t r, void *priv)
+{
+    dprintk(XENLOG_G_INFO, "Writing into some crossbar register\n");
+    return 1;
+}
 
 PLATFORM_START(omap5, "TI OMAP5")
     .compatible = omap5_dt_compat,

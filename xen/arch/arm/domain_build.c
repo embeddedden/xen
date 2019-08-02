@@ -992,7 +992,7 @@ static int __init make_crossbar_node(const struct domain *d, void *fdt,
         DT_MATCH_CROSSBAR,
         {/* sentinel */},
     };
-
+    
     dprintk(XENLOG_INFO, "Create crossbar node\n");
     dev = dt_find_matching_node(NULL, crossbar_ids);
     if ( !dev ) 
@@ -1150,7 +1150,7 @@ static int __init make_crossbar_node(const struct domain *d, void *fdt,
     }
 
     res = fdt_end_node(fdt);
-
+    
     return res;
 }
 
@@ -1350,6 +1350,9 @@ static int __init map_range_to_domain(const struct dt_device_node *dev,
     bool need_mapping = !dt_device_for_passthrough(dev);
     int res;
 
+    if (addr >= 0x4A002000 && addr <= 0x4A003000)
+            printk(XENLOG_INFO "Map address = %llx, for device %s\n", addr, dev->name);
+
     res = iomem_permit_access(d, paddr_to_pfn(addr),
                               paddr_to_pfn(PAGE_ALIGN(addr + len - 1)));
     if ( res )
@@ -1498,6 +1501,8 @@ static int __init handle_device(struct domain *d, struct dt_device_node *dev,
             return res;
         }
 
+        if (addr >= 0x4A002000 && addr <= 0x4A003000)
+            printk(XENLOG_INFO "Map address = %llx, for device %s\n", addr, dev->name);
         res = map_range_to_domain(dev, addr, size, &mr_data);
         if ( res )
             return res;
