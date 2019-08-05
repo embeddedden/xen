@@ -226,14 +226,16 @@ int crossbar_translate(int crossbar_irq_id)
 static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
                            register_t *r, void *priv)
 {
-    dprintk(XENLOG_G_INFO, "Reading from the unmapped region, addr=%u\n", *r);
+    dprintk(XENLOG_G_INFO, "Reading from the unmapped region, r=%u, paddr=%x\n",
+            *r, (u32)info->gpa);
     return 1;
 }
 
 static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
                             register_t r, void *priv)
 {
-    dprintk(XENLOG_G_INFO, "Writing into unmapped region, addr=%u\n", r);
+    dprintk(XENLOG_G_INFO, "Writing into unmapped region, r=%u, paddr=%x\n",
+            r, (u32)info->gpa);
     return 1;
 }
 
