@@ -140,9 +140,10 @@ static int omap5_specific_mapping(struct domain *d)
     map_mmio_regions(d, gaddr_to_gfn(OMAP5_SRAM_PA), 32,
                      maddr_to_mfn(OMAP5_SRAM_PA));
 
+    dump_p2m_lookup(d, 0x4A002A48);
     register_mmio_handler(d, &crossbar_mmio_handler,
-                          0x4A002A48,
-                          300,
+                          0x4A002000,
+                          0x1000,
                           NULL);
     return 0;
 }
@@ -225,14 +226,14 @@ int crossbar_translate(int crossbar_irq_id)
 static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
                            register_t *r, void *priv)
 {
-    dprintk(XENLOG_G_INFO, "Reading some crossbar register\n");
+    dprintk(XENLOG_G_INFO, "Reading from the unmapped region, addr=%u\n", *r);
     return 1;
 }
 
 static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
                             register_t r, void *priv)
 {
-    dprintk(XENLOG_G_INFO, "Writing into some crossbar register\n");
+    dprintk(XENLOG_G_INFO, "Writing into unmapped region, addr=%u\n", r);
     return 1;
 }
 

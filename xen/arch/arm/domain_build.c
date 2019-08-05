@@ -1999,6 +1999,8 @@ static int __init prepare_dtb_hwdom(struct domain *d, struct kernel_info *kinfo)
     if ( ret < 0 )
         goto err;
 
+    unmap_mmio_regions(d, gaddr_to_gfn(0x4A002000), 1,
+                       maddr_to_mfn(0x4A002000));
     return 0;
 
   err:
