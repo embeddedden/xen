@@ -50,6 +50,7 @@ static int current_offset = 0;
 static int mpu_irq = 4;
 
 static void * base_ctrl;
+static void * base_ctrl_page;
 
 static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
                            register_t *r, void *priv);
@@ -197,6 +198,7 @@ int crossbar_translate(int crossbar_irq_id)
 {
     int installed_irq;
     base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 300);
+    base_ctrl_page = ioremap(CTRL_CORE_BASE, 0x1000);
     while ( mpu_irq < 160 ) 
     {
         if (mpu_irq == 4 || 
@@ -226,8 +228,10 @@ int crossbar_translate(int crossbar_irq_id)
 static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
                            register_t *r, void *priv)
 {
+    u16 * ptr = (u16*)((u32)info->gpa - CTRL_CORE_BASE + base_ctrl_page);
     dprintk(XENLOG_G_INFO, "Reading from the unmapped region, r=%u, paddr=%x\n",
             *r, (u32)info->gpa);
+    *r = readw(ptr);
     return 1;
 }
 
@@ -236,6 +240,7 @@ static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
 {
     dprintk(XENLOG_G_INFO, "Writing into unmapped region, r=%u, paddr=%x\n",
             r, (u32)info->gpa);
+    writew((u16)r, (u16*)(u32)(info->gpa - CTRL_CORE_BASE + base_ctrl_page));
     return 1;
 }
 

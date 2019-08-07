@@ -24,6 +24,8 @@
     DT_MATCH_COMPATIBLE("ti,irq-crossbar")
 
 #define CTRL_CORE_MPU_IRQ_BASE                  0x4A002A48
+#define CTRL_CORE_BASE                          0x4A002000
+
 
 int crossbar_translate(int crossbar_irq_id);
 
