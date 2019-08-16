@@ -22,6 +22,12 @@
 #include <xen/mm.h>
 #include <xen/vmap.h>
 #include <asm/io.h>
+#include <asm/domain_build.h>
+
+#define IRQ_FREE        -1
+#define IRQ_RESERVED    -2
+#define IRQ_SKIP        -3
+#define GIC_IRQ_START   32
 
 void omap5_init_secondary(void);
 asm (
@@ -48,6 +54,8 @@ static uint16_t num_den[8][2] = {
 static int current_offset = 0;
 //starting from the fourth line (available are 4,7-130,133-138,141-159)
 static int mpu_irq = 4;
+
+static int crossbar_offsets[160] = {0};
 
 static void * base_ctrl;
 static void * base_ctrl_page;
@@ -125,6 +133,10 @@ static int omap5_init_time(void)
 /* Additional mappings for dom0 (not in the DTS) */
 static int omap5_specific_mapping(struct domain *d)
 {
+    int i, res, mpu_irq_n;
+    struct irq_desc *desc;
+    int crb_offset = 0;
+
     /* Map the PRM module */
     map_mmio_regions(d, gaddr_to_gfn(OMAP5_PRM_BASE), 2,
                      maddr_to_mfn(OMAP5_PRM_BASE));
@@ -146,6 +158,45 @@ static int omap5_specific_mapping(struct domain *d)
                           0x4A002000,
                           0x1000,
                           NULL);
+
+    /*
+     * Route the IRQ to hardware domain and permit the access.
+     * The interrupt type will be set by set by the hardware domain.
+     */
+    for( i = NR_LOCAL_IRQS; i < vgic_num_irqs(d); i++ )
+    {
+        /*
+         * TODO: Exclude the SPIs SMMU uses which should not be routed to
+         * the hardware domain.
+         */
+        desc = irq_to_desc(i);
+        if ( desc->action != NULL)
+            continue;
+
+        /* XXX: Shall we use a proper devname? */
+        res = map_irq_to_domain(d, i, true, "CROSSBAR");
+        if ( res )
+            return res;
+    }
+    base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 300);
+    base_ctrl_page = ioremap(CTRL_CORE_BASE, 0x1000);
+    mpu_irq_n = 4; //starting address
+    while ( mpu_irq_n < 160 )
+    {
+        if (mpu_irq_n == 4 || 
+            ( mpu_irq_n >= 7 && mpu_irq_n <= 130 ) ||
+            ( mpu_irq_n >= 133 && mpu_irq_n <= 159 ))
+        {
+            crossbar_offsets[mpu_irq_n] = crb_offset;
+            crb_offset += 2; //to the next word
+            mpu_irq_n++;
+        }
+        else
+        {
+            mpu_irq_n++;
+        }
+    }
+
     return 0;
 }
 
@@ -205,9 +256,13 @@ int crossbar_translate(int crossbar_irq_id)
             ( mpu_irq >= 7 && mpu_irq <= 130 ) ||
             ( mpu_irq >= 133 && mpu_irq <= 138 ) ||
             ( mpu_irq >= 141 && mpu_irq <= 159 ))
+        {
             break;
+        }
         else
+        {
             mpu_irq++;
+        }
     }
 //    last_mpu_irq = mpu_irq;
     writew(crossbar_irq_id, 
@@ -238,9 +293,26 @@ static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
 static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
                             register_t r, void *priv)
 {
+    int i;
+    u32 current_offset;
     dprintk(XENLOG_G_INFO, "Writing into unmapped region, r=%u, paddr=%x\n",
             r, (u32)info->gpa);
     writew((u16)r, (u16*)(u32)(info->gpa - CTRL_CORE_BASE + base_ctrl_page));
+    if (info->gpa-CTRL_CORE_BASE >= 0xa48 && info->gpa-CTRL_CORE_BASE <= 0xb76)
+    {
+        current_offset = (u32)(info->gpa-CTRL_CORE_BASE-0xa48);
+        dprintk(XENLOG_G_INFO, "Current crossbar offset = %u\n", current_offset);
+        for (i = 0; i < 160; i++)
+        {
+            if (crossbar_offsets[i] == current_offset)
+               break;
+        }
+        if (i == 160)
+            return 0;
+
+        dprintk(XENLOG_G_INFO, "Writing into the crossbar register MPU_IRQ_%u, GIC ID = %u\n",
+                i, i+32);
+    }
     return 1;
 }
 
