@@ -24,6 +24,7 @@
 #include <xen/ctype.h>
 #include <asm/setup.h>
 #include <xen/err.h>
+#include <asm/platform.h>
 
 const void *device_tree_flattened;
 dt_irq_xlate_func dt_irq_xlate;
@@ -1501,10 +1502,10 @@ int dt_irq_translate(const struct dt_raw_irq *raw,
      * TODO: Retrieve the right irq_xlate. This is only works for the primary
      * interrupt controller.
      */
-    if ( raw->controller != dt_interrupt_controller )
+    if ( !platform_irq_is_routable(raw) )
         return -EINVAL;
 
-    return dt_irq_xlate(raw->specifier, raw->size,
+    return platform_irq_translate(raw->specifier, raw->size,
                         &out_irq->irq, &out_irq->type);
 }
 

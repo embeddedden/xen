@@ -11,6 +11,8 @@ struct platform_desc {
     const char *name;
     /* Array of device tree 'compatible' strings */
     const char *const *compatible;
+    /* Array of compatible interrupt controllers */
+    const char *const *irq_compatible;
     /* Platform initialization */
     int (*init)(void);
     int (*init_time)(void);
@@ -38,6 +40,11 @@ struct platform_desc {
      * List of devices which must not pass-through to a guest
      */
     const struct dt_device_match *blacklist_dev;
+    /* Platform-specific IRQ routing */
+    bool (*irq_is_routable)(const struct dt_raw_irq * rirq);
+    int (*irq_translate)(const u32 *intspec, unsigned int intsize,
+                         unsigned int *out_hwirq, 
+                         unsigned int *out_type);
 };
 
 /*
@@ -59,7 +66,10 @@ void platform_poweroff(void);
 bool platform_smc(struct cpu_user_regs *regs);
 bool platform_has_quirk(uint32_t quirk);
 bool platform_device_is_blacklisted(const struct dt_device_node *node);
-
+bool platform_irq_is_routable(const struct dt_raw_irq * rirq);
+int platform_irq_translate(const u32 *intspec, unsigned int intsize,
+                           unsigned int *out_hwirq, 
+                           unsigned int *out_type);
 #define PLATFORM_START(_name, _namestr)                         \
 static const struct platform_desc  __plat_desc_##_name __used   \
 __section(".arch.info") = {                                     \

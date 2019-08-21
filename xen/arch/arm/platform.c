@@ -155,6 +155,27 @@ bool platform_device_is_blacklisted(const struct dt_device_node *node)
     return (dt_match_node(blacklist, node) != NULL);
 }
 
+bool platform_irq_is_routable (const struct dt_raw_irq * rirq)
+{
+    dprintk(XENLOG_DEBUG, "In platform_irq_is_routable\n");
+    if ( platform && platform->irq_is_routable )
+    {
+        return platform->irq_is_routable(rirq);
+    } else
+        return (rirq->controller == dt_interrupt_controller);
+
+}
+
+int platform_irq_translate(const u32 *intspec, unsigned int intsize,
+                  unsigned int *out_hwirq, 
+                  unsigned int *out_type)
+{
+    if (platform && platform->irq_translate)
+        return platform->irq_translate(intspec, intsize, out_hwirq, out_type);
+    else 
+        return dt_irq_xlate(intspec, intsize, out_hwirq, out_type);
+}
+
 /*
  * Local variables:
  * mode: C
