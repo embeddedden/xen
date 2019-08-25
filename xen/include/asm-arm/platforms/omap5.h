@@ -20,6 +20,23 @@
 #define OMAP_AUX_CORE_BOOT_0_OFFSET             0x800
 #define OMAP_AUX_CORE_BOOT_1_OFFSET             0x804
 
+#ifdef CONFIG_CROSSBAR_INTC
+
+#define DT_MATCH_CROSSBAR                       \
+    DT_MATCH_COMPATIBLE("ti,irq-crossbar")
+
+#define CTRL_CORE_MPU_IRQ_BASE                  0x4A002A48
+#define CTRL_CORE_BASE                          0x4A002000
+
+#define CTRL_CORE_MPU_START_OFFSET              0xA48
+#define CTRL_CORE_MPU_END_OFFSET                0xB76
+
+#define BAD_IRQ_LINE -1
+
+#define CROSSBAR_MAX_LINE_NUM                   159
+#define CROSSBAR_NUM_OF_LINES                   160
+#endif /* CONFIG_CROSSBAR_INTC */
+
 #endif /* __ASM_ARM_PLATFORMS_OMAP5_H */
 
 /*

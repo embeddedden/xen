@@ -377,6 +377,9 @@ static int __init omap_uart_init(struct dt_device_node *dev,
     /* Register with generic serial driver */
     serial_register_uart(SERHND_DTUART, &omap_uart_driver, uart);
 
+    /* Also tag a dev's parent as used by xen */
+    if ( dev->parent )
+        dt_device_set_used_by(dev->parent, DOMID_XEN);
     dt_device_set_used_by(dev, DOMID_XEN);
 
     return 0;
