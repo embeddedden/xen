@@ -26,17 +26,25 @@
 #include <xen/irq.h>
 #include <xen/device_tree.h>
 
+#ifdef CONFIG_CROSSBAR_INTC
 static int current_offset = 0;
-//starting from the fourth line (available are 4,7-130,133-138,141-159)
+/* Starting from the fourth line (available are 4,7-130,133-138,141-159) */
 static int mpu_irq = 4;
-
+/* Crossbar control registers offsets from the CTRL_CORE_MPU_IRQ_BASE */
 static int crossbar_offsets[160] = {0};
-
+/* Map to these addresses first CROSSBAR control register and its page start */
 static void * base_ctrl;
 static void * base_ctrl_page;
 
+/* 
+ * Initialise crossbar and related structures. Remember that dom0 should reinit
+ * the crossbar because not all working interrupts are mapped.
+ * Also, this function is called after the first call of crossbar_translate
+ * for xen console initialization.
+ */
 static int omap5_crossbar_init(struct domain* d);
 
+/* IO handlers that write to/read from crossbar registers and control access */
 static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
                            register_t *r, void *priv);
 static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
@@ -46,6 +54,7 @@ static const struct mmio_handler_ops crossbar_mmio_handler = {
     .read  = crossbar_mmio_read,
     .write = crossbar_mmio_write,
 };
+#endif /* CONFIG_CROSSBAR_INTC */
 
 void omap5_init_secondary(void);
 asm (
@@ -148,10 +157,10 @@ static int omap5_specific_mapping(struct domain *d)
     map_mmio_regions(d, gaddr_to_gfn(OMAP5_SRAM_PA), 32,
                      maddr_to_mfn(OMAP5_SRAM_PA));
 
-#ifdef USE_CROSSBAR
+#ifdef CONFIG_CROSSBAR_INTC
     /* FIXME: it shouldn't be here, but it needs a domain to be passed in */
     omap5_crossbar_init(d);
-#endif /* USE_CROSSBAR */
+#endif /* CONFIG_CROSSBAR_INTC */
     return 0;
 }
 
@@ -173,12 +182,12 @@ static int __init omap5_smp_init(void)
 
     printk("Set AuxCoreBoot0 to 0x20\n");
     writel(0x20, wugen_base + OMAP_AUX_CORE_BOOT_0_OFFSET);
-
     iounmap(wugen_base);
 
     return 0;
 }
 
+#ifdef CONFIG_CROSSBAR_INTC
 static int crossbar_translate(const u32 *intspec, unsigned int intsize,
                   unsigned int *out_hwirq, 
                   unsigned int *out_type)
@@ -232,8 +241,6 @@ static int crossbar_translate(const u32 *intspec, unsigned int intsize,
     mpu_irq++;
     /* Get the interrupt number and add 32 to skip over local IRQs */
     *out_hwirq = installed_irq + 32;
-
-
     return 0;
 }
 
@@ -334,18 +341,6 @@ static int omap5_crossbar_init(struct domain *d)
     return 0;
 }
 
-static const char * const omap5_dt_compat[] __initconst =
-{
-    "ti,omap5",
-    NULL
-};
-
-static const char * const dra7_dt_compat[] __initconst =
-{
-    "ti,dra7",
-    NULL
-};
-
 static const char * const crossbar_dt_compat[] __initconst =
 {
     "arm,cortex-a15-gic",
@@ -371,6 +366,20 @@ bool crossbar_irq_is_routable(const struct dt_raw_irq * rirq)
     }
     return false;
 }
+#endif /* CONFIG_CROSSBAR_INTC */
+
+static const char * const omap5_dt_compat[] __initconst =
+{
+    "ti,omap5",
+    NULL
+};
+
+static const char * const dra7_dt_compat[] __initconst =
+{
+    "ti,dra7",
+    NULL
+};
+
 
 PLATFORM_START(omap5, "TI OMAP5")
     .compatible = omap5_dt_compat,
@@ -382,16 +391,16 @@ PLATFORM_END
 
 PLATFORM_START(dra7, "TI DRA7")
     .compatible = dra7_dt_compat,
-    .irq_compatible = crossbar_dt_compat, 
     .specific_mapping = omap5_specific_mapping,
     .init_time = omap5_init_time,
     .cpu_up = cpu_up_send_sgi,
     .smp_init = omap5_smp_init,
     /* Crossbar is presented only in some SoCs, e.g. OMAP AM5728 */
-#ifdef USE_CROSSBAR
+#ifdef CONFIG_CROSSBAR_INTC
     .irq_is_routable = crossbar_irq_is_routable,
     .irq_translate = crossbar_translate,
-#endif
+    .irq_compatible = crossbar_dt_compat, 
+#endif /* CONFIG_CROSSBAR_INTC */
 PLATFORM_END
 
 /*
