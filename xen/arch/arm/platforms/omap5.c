@@ -27,17 +27,16 @@
 #include <xen/device_tree.h>
 
 #ifdef CONFIG_CROSSBAR_INTC
-#define BAD_IRQ_LINE -1
 static int current_offset = 0;
 /* Starting from the fourth line (available are 4,7-130,133-138,141-159) */
 static int mpu_irq = 4;
 /* Crossbar control registers offsets from the CTRL_CORE_MPU_IRQ_BASE */
-static int crossbar_offsets[160] = {0};
+static int crossbar_offsets[CROSSBAR_NUM_OF_LINES] = {0};
 /* Map to these addresses first CROSSBAR control register and its page start */
 static void * base_ctrl;
 static void * base_ctrl_page;
 
-/* 
+/*
  * Initialise crossbar and related structures. Remember that dom0 should reinit
  * the crossbar because not all working interrupts are mapped.
  * Also, this function is called after the first call of crossbar_translate
@@ -190,13 +189,13 @@ static int __init omap5_smp_init(void)
 
 #ifdef CONFIG_CROSSBAR_INTC
 static int crossbar_translate(const u32 *intspec, unsigned int intsize,
-                  unsigned int *out_hwirq, 
+                  unsigned int *out_hwirq,
                   unsigned int *out_type)
 {
     int installed_irq;
     int crossbar_irq_id = intspec[1];
     dprintk(XENLOG_INFO, "In %s\n", __func__);
-    
+
     if ( intsize < 3 )
         return -EINVAL;
 
@@ -210,14 +209,14 @@ static int crossbar_translate(const u32 *intspec, unsigned int intsize,
         return 0;
     }
 
-    /* 
+    /*
      * We need to remap those addresses here because we need to use them
      * in the very begining for the console interrupt. omap5_crossbar_init is
      * called later - we can't do it there.
      */
     base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 300);
     base_ctrl_page = ioremap(CTRL_CORE_BASE, 0x1000);
-    while ( mpu_irq <= 159 ) 
+    while ( mpu_irq <= CROSSBAR_MAX_LINE_NUM )
     {
         if ( mpu_irq == 4 ||
            ( mpu_irq >= 7 && mpu_irq <= 130 ) ||
@@ -231,14 +230,15 @@ static int crossbar_translate(const u32 *intspec, unsigned int intsize,
             mpu_irq++;
         }
     }
-    if ( mpu_irq >= 159 )
-        mpu_irq = 159;
+    if ( mpu_irq >= CROSSBAR_MAX_LINE_NUM )
+        /* Map all interrupts that don't fit to one crossbar line */
+        mpu_irq = CROSSBAR_MAX_LINE_NUM;
 
     installed_irq = mpu_irq;
     current_offset = crossbar_offsets[mpu_irq];
     writew(crossbar_irq_id, base_ctrl+current_offset);
     dprintk(XENLOG_INFO, "crossbar_id = %d, mapped to irq = %d, \
-            current_offset = %d\n", crossbar_irq_id, installed_irq, current_offset);    
+            current_offset = %d\n", crossbar_irq_id, installed_irq, current_offset);
     mpu_irq++;
     /* Get the interrupt number and add 32 to skip over local IRQs */
     *out_hwirq = installed_irq + 32;
@@ -250,21 +250,23 @@ static bool crossbar_register_accessible(mmio_info_t *info)
     int i;
     u32 current_offset;
 
-    if ( info->gpa-CTRL_CORE_BASE >= 0xa48 && info->gpa-CTRL_CORE_BASE <= 0xb76 )
-    {   
-        current_offset = (u32)(info->gpa-CTRL_CORE_BASE-0xa48);
+    if ( info->gpa-CTRL_CORE_BASE >= CTRL_CORE_MPU_START_OFFSET && 
+         info->gpa-CTRL_CORE_BASE <= CTRL_CORE_MPU_END_OFFSET )
+    {
+        current_offset = (u32)(info->gpa-CTRL_CORE_BASE-\
+                               CTRL_CORE_MPU_START_OFFSET);
         dprintk(XENLOG_G_INFO, "Current crossbar offset = %u\n", current_offset);
-        for (i = 0; i < 160; i++)
-        {   
+        for (i = 0; i < CROSSBAR_NUM_OF_LINES; i++)
+        {
             if ( crossbar_offsets[i] == current_offset )
                break;
         }
-        /* 
+        /*
          * If the corresponging interrupt hasn't been found or
          * if dom0 tries to write into xen console's crossbar control register
          * we don't allow the access
          */
-        if (i == 160 || i == 4)
+        if (i == CROSSBAR_NUM_OF_LINES || i == 4)
         {
             dprintk(XENLOG_G_ERR, "Access to the crossbar register \
                     MPU_IRQ_%u, GIC ID = %u was forbidden\n", i, i+32);
@@ -274,12 +276,11 @@ static bool crossbar_register_accessible(mmio_info_t *info)
         dprintk(XENLOG_G_INFO, "Accessing the crossbar register \
                 MPU_IRQ_%u, GIC ID = %u\n", i, i+32);
         return true;
-    } else 
+    } else
     {
         dprintk(XENLOG_G_INFO, "Not a crossbar register\n");
         return false;
     }
-
 }
 static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
                               register_t *r, void *priv)
@@ -287,7 +288,8 @@ static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
     u16 * ptr = (u16*)((u32)info->gpa - CTRL_CORE_BASE + base_ctrl_page);
     dprintk(XENLOG_G_INFO, "Reading from the unmapped region, r=%u, paddr=%x\n",
             *r, (u32)info->gpa);
-    if ( info->gpa-CTRL_CORE_BASE >= 0xa48 && info->gpa-CTRL_CORE_BASE <= 0xb76 )
+    if ( info->gpa-CTRL_CORE_BASE >= CTRL_CORE_MPU_START_OFFSET && 
+         info->gpa-CTRL_CORE_BASE <= CTRL_CORE_MPU_END_OFFSET )
     {
         if ( crossbar_register_accessible(info) )
         {
@@ -299,7 +301,6 @@ static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
             return 0;
         }
     }
-
     *r = readw(ptr);
     return 1;
 }
@@ -309,7 +310,8 @@ static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
 {
     dprintk(XENLOG_G_INFO, "Writing into unmapped region, r=%u, paddr=%x\n",
             r, (u32)info->gpa);
-    if ( info->gpa-CTRL_CORE_BASE >= 0xa48 && info->gpa-CTRL_CORE_BASE <= 0xb76 )
+    if ( info->gpa-CTRL_CORE_BASE >= CTRL_CORE_MPU_START_OFFSET && 
+         info->gpa-CTRL_CORE_BASE <= CTRL_CORE_MPU_END_OFFSET )
     {
         if ( crossbar_register_accessible(info) )
         {
@@ -355,23 +357,23 @@ static int omap5_crossbar_init(struct domain *d)
         res = map_irq_to_domain(d, i, true, "CROSSBAR");
         if ( res )
             return res;
-    }    
+    }
     base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 300);
     base_ctrl_page = ioremap(CTRL_CORE_BASE, 0x1000);
     mpu_irq_n = 4; //starting address
-    while ( mpu_irq_n < 160 )
+    while ( mpu_irq_n < CROSSBAR_NUM_OF_LINES )
     {
-        /* 
+        /*
          * We can use only available crossbar lines.
          * Generally, we should use ti,irqs-skip property from device tree.
          * But it is not implemented yet.
          */
-        if ( mpu_irq_n == 4 || 
+        if ( mpu_irq_n == 4 ||
            ( mpu_irq_n >= 7 && mpu_irq_n <= 130 ) ||
            ( mpu_irq_n >= 133 && mpu_irq_n <= 159 ))
         {
             crossbar_offsets[mpu_irq_n] = crb_offset;
-            /* 
+            /*
              * Since available IRQ lines are placed linearly in memory with
              * every next register being two bytes aligned.
              */
@@ -391,7 +393,7 @@ static const char * const crossbar_dt_compat[] __initconst =
 {
     "arm,cortex-a15-gic",
     "ti,irq-crossbar",
-    "ti,omap5-wugen-mpu", 
+    "ti,omap5-wugen-mpu",
     "ti,omap4-wugen-mpu",
     NULL
 };
@@ -445,7 +447,7 @@ PLATFORM_START(dra7, "TI DRA7")
 #ifdef CONFIG_CROSSBAR_INTC
     .irq_is_routable = crossbar_irq_is_routable,
     .irq_translate = crossbar_translate,
-    .irq_compatible = crossbar_dt_compat, 
+    .irq_compatible = crossbar_dt_compat,
 #endif /* CONFIG_CROSSBAR_INTC */
 PLATFORM_END
 
