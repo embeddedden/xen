@@ -898,8 +898,8 @@ static int __init make_gic_node(const struct domain *d, void *fdt,
 {
     const struct dt_device_node *gic = dt_interrupt_controller;
     int res = 0;
-    const void *addrcells, *sizecells;
-    u32 addrcells_len, sizecells_len;
+    const void *addrcells, *sizecells, *int_parent;
+    u32 addrcells_len, sizecells_len, iplen;
 
     /*
      * Xen currently supports only a single GIC. Discard any secondary
@@ -948,6 +948,14 @@ static int __init make_gic_node(const struct domain *d, void *fdt,
     res = fdt_property_cell(fdt, "#interrupt-cells", 3);
     if ( res )
         return res;
+
+    int_parent = dt_get_property(gic, "interrupt-parent", &iplen);
+    if ( int_parent )
+    {
+        res = fdt_property(fdt, "interrupt-parent", int_parent, iplen);
+        if ( res )
+            return res;
+    }
 
     res = fdt_property(fdt, "interrupt-controller", NULL, 0);
     if ( res )
@@ -1274,7 +1282,7 @@ static int __init handle_device(struct domain *d, struct dt_device_node *dev,
          * Don't map IRQ that have no physical meaning
          * ie: IRQ whose controller is not the GIC
          */
-        if ( rirq.controller != dt_interrupt_controller )
+        if ( !platform_irq_is_routable(&rirq) )
         {
             dt_dprintk("irq %u not connected to primary controller. Connected to %s\n",
                       i, dt_node_full_name(rirq.controller));
