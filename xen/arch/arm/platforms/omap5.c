@@ -198,8 +198,10 @@ static int crossbar_translate(const u32 *intspec, unsigned int intsize,
         return 0;
     }
 
-
-    /* Get the interrupt number and add 16 to skip over SGIs */
+    /* We need to remap those addresses here because we need to use them
+     * in the very begining for the console interrupt. omap5_crossbar_init is
+     * called later - we can't do it there.
+     */
     base_ctrl = ioremap(CTRL_CORE_MPU_IRQ_BASE, 300);
     base_ctrl_page = ioremap(CTRL_CORE_BASE, 0x1000);
     while ( mpu_irq <= 159 ) 
@@ -250,13 +252,13 @@ static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
     dprintk(XENLOG_G_INFO, "Writing into unmapped region, r=%u, paddr=%x\n",
             r, (u32)info->gpa);
     writew((u16)r, (u16*)(u32)(info->gpa - CTRL_CORE_BASE + base_ctrl_page));
-    if (info->gpa-CTRL_CORE_BASE >= 0xa48 && info->gpa-CTRL_CORE_BASE <= 0xb76)
+    if ( info->gpa-CTRL_CORE_BASE >= 0xa48 && info->gpa-CTRL_CORE_BASE <= 0xb76 )
     {
         current_offset = (u32)(info->gpa-CTRL_CORE_BASE-0xa48);
         dprintk(XENLOG_G_INFO, "Current crossbar offset = %u\n", current_offset);
         for (i = 0; i < 160; i++)
         {
-            if (crossbar_offsets[i] == current_offset)
+            if ( crossbar_offsets[i] == current_offset )
                break;
         }
         if (i == 160)
@@ -282,7 +284,7 @@ static int omap5_crossbar_init(struct domain *d)
                           CTRL_CORE_BASE,
                           0x1000,
                           NULL);
-    
+
     /* Map all irqs virq=irq */
     for( i = NR_LOCAL_IRQS; i < vgic_num_irqs(d); i++ )
     {
@@ -291,7 +293,7 @@ static int omap5_crossbar_init(struct domain *d)
          * the hardware domain.
          */
         desc = irq_to_desc(i);
-        if ( desc->action != NULL)
+        if ( desc->action != NULL )
             continue;
 
         /* XXX: Shall we use a proper devname? */
@@ -304,12 +306,18 @@ static int omap5_crossbar_init(struct domain *d)
     mpu_irq_n = 4; //starting address
     while ( mpu_irq_n < 160 )
     {
-        if (mpu_irq_n == 4 || 
-            ( mpu_irq_n >= 7 && mpu_irq_n <= 130 ) ||
-            ( mpu_irq_n >= 133 && mpu_irq_n <= 159 ))
+        /* We can use only available crossbar lines.
+         * Generally, we should use ti,irqs-skip property from device tree.
+         */
+        if ( mpu_irq_n == 4 || 
+           ( mpu_irq_n >= 7 && mpu_irq_n <= 130 ) ||
+           ( mpu_irq_n >= 133 && mpu_irq_n <= 159 ))
         {
             crossbar_offsets[mpu_irq_n] = crb_offset;
-            crb_offset += 2; //to the next word
+            /* Since available IRQ lines are placed linearly in memory with
+             * every next register being two bytes aligned.
+             */
+            crb_offset += 2;
             mpu_irq_n++;
         }
         else
