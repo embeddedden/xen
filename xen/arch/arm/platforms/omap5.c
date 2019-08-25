@@ -27,6 +27,7 @@
 #include <xen/device_tree.h>
 
 #ifdef CONFIG_CROSSBAR_INTC
+#define BAD_IRQ_LINE -1
 static int current_offset = 0;
 /* Starting from the fourth line (available are 4,7-130,133-138,141-159) */
 static int mpu_irq = 4;
@@ -244,12 +245,61 @@ static int crossbar_translate(const u32 *intspec, unsigned int intsize,
     return 0;
 }
 
+static bool crossbar_register_accessible(mmio_info_t *info)
+{
+    int i;
+    u32 current_offset;
+
+    if ( info->gpa-CTRL_CORE_BASE >= 0xa48 && info->gpa-CTRL_CORE_BASE <= 0xb76 )
+    {   
+        current_offset = (u32)(info->gpa-CTRL_CORE_BASE-0xa48);
+        dprintk(XENLOG_G_INFO, "Current crossbar offset = %u\n", current_offset);
+        for (i = 0; i < 160; i++)
+        {   
+            if ( crossbar_offsets[i] == current_offset )
+               break;
+        }
+        /* 
+         * If the corresponging interrupt hasn't been found or
+         * if dom0 tries to write into xen console's crossbar control register
+         * we don't allow the access
+         */
+        if (i == 160 || i == 4)
+        {
+            dprintk(XENLOG_G_ERR, "Access to the crossbar register \
+                    MPU_IRQ_%u, GIC ID = %u was forbidden\n", i, i+32);
+            return false;
+        }
+
+        dprintk(XENLOG_G_INFO, "Accessing the crossbar register \
+                MPU_IRQ_%u, GIC ID = %u\n", i, i+32);
+        return true;
+    } else 
+    {
+        dprintk(XENLOG_G_INFO, "Not a crossbar register\n");
+        return false;
+    }
+
+}
 static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
                               register_t *r, void *priv)
 {
     u16 * ptr = (u16*)((u32)info->gpa - CTRL_CORE_BASE + base_ctrl_page);
     dprintk(XENLOG_G_INFO, "Reading from the unmapped region, r=%u, paddr=%x\n",
             *r, (u32)info->gpa);
+    if ( info->gpa-CTRL_CORE_BASE >= 0xa48 && info->gpa-CTRL_CORE_BASE <= 0xb76 )
+    {
+        if ( crossbar_register_accessible(info) )
+        {
+            dprintk(XENLOG_G_INFO, "Reading from the crossbar register\n");
+        } else
+        {
+            dprintk(XENLOG_G_INFO, "Read from the crossbar register was \
+                    forbidden\n");
+            return 0;
+        }
+    }
+
     *r = readw(ptr);
     return 1;
 }
@@ -257,26 +307,21 @@ static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
 static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
                                register_t r, void *priv)
 {
-    int i;
-    u32 current_offset;
     dprintk(XENLOG_G_INFO, "Writing into unmapped region, r=%u, paddr=%x\n",
             r, (u32)info->gpa);
-    writew((u16)r, (u16*)(u32)(info->gpa - CTRL_CORE_BASE + base_ctrl_page));
     if ( info->gpa-CTRL_CORE_BASE >= 0xa48 && info->gpa-CTRL_CORE_BASE <= 0xb76 )
     {
-        current_offset = (u32)(info->gpa-CTRL_CORE_BASE-0xa48);
-        dprintk(XENLOG_G_INFO, "Current crossbar offset = %u\n", current_offset);
-        for (i = 0; i < 160; i++)
+        if ( crossbar_register_accessible(info) )
         {
-            if ( crossbar_offsets[i] == current_offset )
-               break;
-        }
-        if (i == 160)
+            dprintk(XENLOG_G_INFO, "Writing into the crossbar register\n");
+        } else
+        {
+            dprintk(XENLOG_G_INFO, "Write to the crossbar register was \
+                    forbidden\n");
             return 0;
-
-        dprintk(XENLOG_G_INFO, "Writing into the crossbar register MPU_IRQ_%u, GIC ID = %u\n",
-                i, i+32);
+        }
     }
+    writew((u16)r, (u16*)(u32)(info->gpa - CTRL_CORE_BASE + base_ctrl_page));
     return 1;
 }
 
@@ -335,6 +380,7 @@ static int omap5_crossbar_init(struct domain *d)
         }
         else
         {
+            crossbar_offsets[mpu_irq_n] = BAD_IRQ_LINE;
             mpu_irq_n++;
         }
     }
