@@ -148,8 +148,10 @@ static int omap5_specific_mapping(struct domain *d)
     map_mmio_regions(d, gaddr_to_gfn(OMAP5_SRAM_PA), 32,
                      maddr_to_mfn(OMAP5_SRAM_PA));
 
+#ifdef USE_CROSSBAR
     /* FIXME: it shouldn't be here, but it needs a domain to be passed in */
     omap5_crossbar_init(d);
+#endif /* USE_CROSSBAR */
     return 0;
 }
 
@@ -198,7 +200,8 @@ static int crossbar_translate(const u32 *intspec, unsigned int intsize,
         return 0;
     }
 
-    /* We need to remap those addresses here because we need to use them
+    /* 
+     * We need to remap those addresses here because we need to use them
      * in the very begining for the console interrupt. omap5_crossbar_init is
      * called later - we can't do it there.
      */
@@ -285,7 +288,7 @@ static int omap5_crossbar_init(struct domain *d)
                           0x1000,
                           NULL);
 
-    /* Map all irqs virq=irq */
+    /* Map all irqs so virq=irq */
     for( i = NR_LOCAL_IRQS; i < vgic_num_irqs(d); i++ )
     {
         /*
@@ -306,15 +309,18 @@ static int omap5_crossbar_init(struct domain *d)
     mpu_irq_n = 4; //starting address
     while ( mpu_irq_n < 160 )
     {
-        /* We can use only available crossbar lines.
+        /* 
+         * We can use only available crossbar lines.
          * Generally, we should use ti,irqs-skip property from device tree.
+         * But it is not implemented yet.
          */
         if ( mpu_irq_n == 4 || 
            ( mpu_irq_n >= 7 && mpu_irq_n <= 130 ) ||
            ( mpu_irq_n >= 133 && mpu_irq_n <= 159 ))
         {
             crossbar_offsets[mpu_irq_n] = crb_offset;
-            /* Since available IRQ lines are placed linearly in memory with
+            /* 
+             * Since available IRQ lines are placed linearly in memory with
              * every next register being two bytes aligned.
              */
             crb_offset += 2;
@@ -355,7 +361,7 @@ bool crossbar_irq_is_routable(const struct dt_raw_irq * rirq)
     if ( true )
     {
         int i;
-        //ARRAY_SIZE doesn't work for platform->irq_compatible
+        /* ARRAY_SIZE doesn't work for platform->irq_compatible */
         for (i = 0; i < 4; i++)
         {
             if ( dt_device_is_compatible(rirq->controller,
@@ -381,8 +387,11 @@ PLATFORM_START(dra7, "TI DRA7")
     .init_time = omap5_init_time,
     .cpu_up = cpu_up_send_sgi,
     .smp_init = omap5_smp_init,
+    /* Crossbar is presented only in some SoCs, e.g. OMAP AM5728 */
+#ifdef USE_CROSSBAR
     .irq_is_routable = crossbar_irq_is_routable,
     .irq_translate = crossbar_translate,
+#endif
 PLATFORM_END
 
 /*
