@@ -43,7 +43,7 @@ struct platform_desc {
     /* Platform-specific IRQ routing */
     bool (*irq_is_routable)(const struct dt_raw_irq * rirq);
     int (*irq_translate)(const u32 *intspec, unsigned int intsize,
-                         unsigned int *out_hwirq, 
+                         unsigned int *out_hwirq,
                          unsigned int *out_type);
 };
 
@@ -68,7 +68,7 @@ bool platform_has_quirk(uint32_t quirk);
 bool platform_device_is_blacklisted(const struct dt_device_node *node);
 bool platform_irq_is_routable(const struct dt_raw_irq * rirq);
 int platform_irq_translate(const u32 *intspec, unsigned int intsize,
-                           unsigned int *out_hwirq, 
+                           unsigned int *out_hwirq,
                            unsigned int *out_type);
 #define PLATFORM_START(_name, _namestr)                         \
 static const struct platform_desc  __plat_desc_##_name __used   \

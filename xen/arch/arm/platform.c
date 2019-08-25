@@ -167,12 +167,12 @@ bool platform_irq_is_routable (const struct dt_raw_irq * rirq)
 }
 
 int platform_irq_translate(const u32 *intspec, unsigned int intsize,
-                  unsigned int *out_hwirq, 
+                  unsigned int *out_hwirq,
                   unsigned int *out_type)
 {
     if (platform && platform->irq_translate)
         return platform->irq_translate(intspec, intsize, out_hwirq, out_type);
-    else 
+    else
         return dt_irq_xlate(intspec, intsize, out_hwirq, out_type);
 }
 

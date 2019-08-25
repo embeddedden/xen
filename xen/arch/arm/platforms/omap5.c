@@ -250,7 +250,7 @@ static bool crossbar_register_accessible(mmio_info_t *info)
     int i;
     u32 current_offset;
 
-    if ( info->gpa-CTRL_CORE_BASE >= CTRL_CORE_MPU_START_OFFSET && 
+    if ( info->gpa-CTRL_CORE_BASE >= CTRL_CORE_MPU_START_OFFSET &&
          info->gpa-CTRL_CORE_BASE <= CTRL_CORE_MPU_END_OFFSET )
     {
         current_offset = (u32)(info->gpa-CTRL_CORE_BASE-\
@@ -288,7 +288,7 @@ static int crossbar_mmio_read(struct vcpu *v, mmio_info_t *info,
     u16 * ptr = (u16*)((u32)info->gpa - CTRL_CORE_BASE + base_ctrl_page);
     dprintk(XENLOG_G_INFO, "Reading from the unmapped region, r=%u, paddr=%x\n",
             *r, (u32)info->gpa);
-    if ( info->gpa-CTRL_CORE_BASE >= CTRL_CORE_MPU_START_OFFSET && 
+    if ( info->gpa-CTRL_CORE_BASE >= CTRL_CORE_MPU_START_OFFSET &&
          info->gpa-CTRL_CORE_BASE <= CTRL_CORE_MPU_END_OFFSET )
     {
         if ( crossbar_register_accessible(info) )
@@ -310,7 +310,7 @@ static int crossbar_mmio_write(struct vcpu *v, mmio_info_t *info,
 {
     dprintk(XENLOG_G_INFO, "Writing into unmapped region, r=%u, paddr=%x\n",
             r, (u32)info->gpa);
-    if ( info->gpa-CTRL_CORE_BASE >= CTRL_CORE_MPU_START_OFFSET && 
+    if ( info->gpa-CTRL_CORE_BASE >= CTRL_CORE_MPU_START_OFFSET &&
          info->gpa-CTRL_CORE_BASE <= CTRL_CORE_MPU_END_OFFSET )
     {
         if ( crossbar_register_accessible(info) )
