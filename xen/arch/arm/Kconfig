@@ -105,7 +105,13 @@ config HARDEN_BRANCH_PREDICTOR
 	  firmware.
 
 	  If unsure, say Y.
-
+config CROSSBAR_INTC
+        bool "Crossbar interrupt controller for some OMAP5 SoCs"
+        default n
+        help
+          This enables support of crossbar interrupt controller which is an
+          interrupt mapping device which maps SPIs from devices to GIC in some
+          OMAP5 SoCs.
 endmenu
 
 menu "ARM errata workaround via the alternative framework"
